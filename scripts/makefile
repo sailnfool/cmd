@@ -1,39 +1,8 @@
 SHELL=/bin/bash
 PREFIX?=$(HOME)
-LPREFIX=$(HOME)/.local
 .sh:
 	@rm -f $@
 	cp $< $@
-LINSTALL =       func.arithmetic \
-		func.cwave \
-		func.dec2hex \
-		func.debug \
-		func.doshells \
-		func.env \
-		func.errecho \
-		func.getprojdir \
-		func.hex2binfile \
-		func.hex2dec \
-		func.hmsout \
-		func.insufficient \
-		func.kbytes \
-		func.locker \
-		func.logger \
-		func.nice2num \
-		func.num2nice \
-		func.onefilehash \
-		func.onefilereformat \
-		func.os \
-		func.pathmunge \
-		func.random \
-		func.regex \
-		func.toseconds \
-		func.uuid \
-		hash.askcreatecanonical \
-		hash.globalcanonical \
-		hash.loadcanonical \
-		zfunc.zfsparent \
-		zfunc.results
 INSTALL =		countfiles \
 		hashcreatecanonical \
 		dohashes \
@@ -42,6 +11,7 @@ INSTALL =		countfiles \
 		histogram \
 		mypr \
 		mysourcedate \
+		mynl \
 		nowinUCT \
 		pinger \
 		pinger2 \
@@ -58,14 +28,10 @@ LEXECDIR := $(LPREFIX)/bin
 
 
 .PHONY: clean uninstall all
-all: $(LINSTALL) $(INSTALL)
+all: $(INSTALL)
 install: $(INSTALL)
 	mkdir -p $(EXECDIR)
 	install -o $(USER) -C $? $(EXECDIR)
-	rm -f $?
-linstall: $(LINSTALL)
-	mkdir -p $(LEXECDIR)
-	install -o $(USER) -C $? $(LEXECDIR)
 	rm -f $?
 clean: 
 	@for execfile in $(INSTALL); do \
