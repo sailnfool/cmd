@@ -3,11 +3,11 @@ PREFIX?=$(HOME)
 .sh:
 	@rm -f $@
 	cp $< $@
-INSTALL =		countfiles \
-		hashcreatecanonical \
+INSTALL =	countfiles \
+		differ \
 		dohashes \
 		find_sim \
-		getgitroot \
+		hashcreatecanonical \
 		histogram \
 		mypr \
 		mysourcedate \
@@ -18,10 +18,6 @@ INSTALL =		countfiles \
 		proj_setup \
 		pathmunge \
 		uuid
-#		func.kkbytes \
-#		func.kerrecho \
-#		func.knice2num \
-#		func.kinsufficient \
 
 EXECDIR := $(PREFIX)/bin
 LEXECDIR := $(LPREFIX)/bin
