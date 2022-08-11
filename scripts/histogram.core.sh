@@ -5,7 +5,7 @@
 # From the root directory passed as a parameter,
 # generate a histogram of the files and subdirectories of that tree.
 #
-# Bin the files in the drectories into two types of bins:
+# Bin the files in the directories into two types of bins:
 #
 # DONE: File size by powers of 2
 # 
