@@ -1,17 +1,26 @@
 #!/bin/bash
-####################
-# Copyright (c) 2019 Sea2Cloud
-# 3901 Moorea Dr.
-# Modesto, CA 95356
-# 408-910-9134
+scriptname=${0##*/}
+########################################################################
+# copyrightyear         : (C) 2022
+# copyrightowncer       : Robert E. Novak
+# rightsgranted         : All Rights Reserved
+# location              : Modesto, CA 95356
+########################################################################
 #
-# Author - Robert E. Novak aka REN
-#	sailnfool@gmail.com
-#	skype:sailnfool.ren
+# countfiles - Count the number of files underneath the directory 
+#              passed as a parameter.
 #
+# author                : Robert E. Novak
+# authorinitials        : REN
+# email                 : sailnfool@gmail.com
+# license               : License CC
+# licensor              : Sea2cloud Storage, Inc.
+# licensurl     : https://creativecommons.org/licenses/by/4.0/legalcode
+# licensename           : Creative Commons Attribution license
 #_____________________________________________________________________
 # Rev.|Aut| Date     | Notes
 #_____________________________________________________________________
+# 3.0 |REN|08/03/2022| New headers
 # 2.2 |REN|03/15/2021| Fixed the column command invocation.
 # 2.1 |REN|06/27/2020| brought up to date with getopts
 # 2.0 |REN|12/03/2019| Modified to use more source'd functions
@@ -21,14 +30,19 @@
 # 1.0 |REN|07/22/2010| Initial Release
 #_____________________________________________________________________
 #
+source func.debug
 source func.errecho
+source func.insufficient
+source func.regex
+
 ####################
 # set up local variables for debugging
 ####################
-configure_debug=0
-configure_verbose=0
-pingertmp=/tmp/pinger.$$
+FUNC_DEBUG=${DEBUGOFF}
+verbosemode="FALSE"
+pingertmp=/tmp/${scriptname}_dir.$$
 mkdir -p $pingertmp
+
 ####################
 # USAGE
 #
@@ -44,10 +58,11 @@ subnet=$(hostname -I | sed -e 's/\.[^\.]*$//')
 netdevice=$(ip route list default | cut -f 5 -d ' ')
 netmask=$(ifconfig "$netdevice" | awk '/netmask/{ print $4;}')
 gateway=$(ip r | grep default | awk -F " " '{print $3}')
+
 USAGE="${0##*/} [-hv] [-p <IP Prefix] [-n IP netmask] [-g <gateway>]\n
 \t\t[-I <low ping>] [-O <high ping>]\n\n
 \t-h\t\t\tDisplay this message\n
-\t-d\t<#>\tenable debug >=9 does set-x\n
+\t-d\t<#>\tUse -vh to see debug levels\n
 \t-v\t\t\tVerbose Mode\n
 \t-p\t<IP Prefix>\tDefault on this machine is $subnet\n
 \t-n\t<netmask>\tDefault on network on this device is $netdevice\n
@@ -61,19 +76,19 @@ USAGE="${0##*/} [-hv] [-p <IP Prefix] [-n IP netmask] [-g <gateway>]\n
 \t\t\twould exclude the arp and nslookup reports\n
 "
 
-configure_verbose=0
-configure_IPrefix=0
-configure_IPnetmask=0
-configure_gateway=0
+verbosemode="FALSE"
+configure_IPrefix="FALSE"
+configure_IPnetmask="FALSE"
+configure_gateway="FALSE"
 
 ####################
 # Set the subnet and Mask Parameters
 #
 # This is the subnet 
 ####################
-configure_IPrefix=1
+configure_IPrefix="TRUE"
 subnet=$(hostname -I | sed -e 's/\.[^\.]*$//')
-configure_IPnetmask=1
+configure_IPnetmask="TRUE"
 
 ####################
 # gateway Addresses
@@ -108,31 +123,64 @@ do_arpscan=1
 do_etchosts=1
 included="arp nslookup arpscan nmap etchosts"
 excluded="nmap"
-if [ ${configure_debug} = 1 ]
-then
+if [[ "${FUNC_DEBUG}" -gt "${DEBUGOFF}" ]] ; then
 	echo "Parameters are $*"
 fi
 while getopts ${optionargs} name
 do
 	case ${name} in
-	h)	echo -ne ${USAGE}; exit 0; ;;
-	d)	configure_debug="${OPTARG}"
-      if [ "${configure_debug}" -ge 9 ]
-      then
-        set -x
-      fi
-      ;;
-	v)	configure_verbose=1; ;;
-	p)	subnet=${OPTARG}; configure_IPrefix=1; ;;
-	n)	netmask=${OPTARG}; configure_IPnetmaks=1; ;;
-	g)	gateway=${OPTARG}; configure_gateway=1; ;;
-	I)	Low_PING_Port=${OPTARG}; configure_LowPING=1; ;;
-	O)	High_PING_Port=${OPTARG}; configure_HighPING=1; ;;
-	X)	excluded="${excluded} $(echo ${OPTARG}|tr ':' ' ')"; ;;
-	\?)	errecho "invalid option -${OPTARG}"; \
-		errecho "-e" ${USAGE}; exit 1; ;;
+		h)
+			errecho -e "${USAGE}"
+			if [[ "${verbosemode}" == "TRUE" ]] ; then
+				errecho -e "${DEBUG_USAGE}"
+			fi
+			exit 0
+			;;
+		d)	
+			if [[ "${OPTARG}" =~ ${re_digit} ]] ; then
+				errecho "-d must be  digit ${OPTARG}"
+				exit 1
+			fi
+			FUNC_DEBUG="${OPTARG}"
+			if [[ "${FUNC_DEBUG}" -ge \
+				"${DEBUGSETX}" ]]; then
+				set -x
+			fi
+			;;
+		v)
+			verbosemode="TRUE"
+			verboseflag="-v"
+			;;
+		p)
+			subnet=${OPTARG}
+			configure_IPrefix="TRUE"
+			;;
+		n)
+			netmask=${OPTARG}
+			configure_IPnetmaks="TRUE"
+			;;
+		g)
+			gateway=${OPTARG}
+			configure_gateway="TRUE"
+			;;
+		I)
+			Low_PING_Port=${OPTARG}
+			configure_LowPING="TRUE"
+			;;
+		O)
+			High_PING_Port=${OPTARG}
+			configure_HighPING="TRUE"
+			;;
+		X)	excluded="${excluded} " \
+				"$(echo ${OPTARG}|tr ':' ' ')"
+			;;
+		\?)	errecho "invalid option -${OPTARG}"
+			errecho -e "${USAGE}"
+			exit 1
+			;;
 	esac
 done
+
 shift "$((${OPTIND} - 1 ))"
 
 ####################
@@ -143,51 +191,54 @@ for query in ${included}
 do
 	isexcluded=$(echo ${excluded}|grep '\w*'$query'\w*')
 
-	if [ -z "${isexcluded}" ]
-	then
+	if [[ -z "${isexcluded}" ]] ; then
 		newincluded="${newincluded} ${query}"
 	fi
 done
 
-if [ $# != ${NUMARGS} ]
-then
-	echo -ne ${USAGE}
+if [[ $# -lt ${NUMARGS} ]] ; then
+	insufficient ${NUMARGS} $@
+	errecho -e ${USAGE}
 	exit 2
 fi
 for query in ${newincluded}
 do
 	case $query in
-	arp)
-		if [ $(which $query|wc -l) -ne 1 ]
-		then
-			sudo sudo apt-get update && sudo apt-get install -y net-tools
-		fi
-		;;
-	arpscan)
-		if [ $(which arp-scan|wc -l) -ne 1 ]
-		then
-			sudo sudo apt-get update && sudo apt-get install -y arp-scan
-		fi
-		;;
-	nslookup)
-		if [ $(which $query|wc -l) -ne 1 ]
-		then
-			sudo sudo apt-get update && sudo apt-get install -y dnsutils
-		fi
-		;;
-	nmap)
-		if [ $(which $query|wc -l) -ne 1 ]
-		then
-			sudo sudo apt-get update && sudo apt-get install -y nmap
-		fi
-		;;
-	etchosts)
-		;;
+		arp)
+			if [[ $(which $query|wc -l) -ne 1 ]] ; then
+				sudo apt-get update && \
+					sudo apt-get install -y \
+					net-tools
+			fi
+			;;
+		arpscan)
+			if [[ $(which arp-scan|wc -l) -ne 1 ]] ; then
+				sudo apt-get update && \
+					sudo apt-get install -y \
+					arp-scan
+			fi
+			;;
+		nslookup)
+			if [[ $(which $query|wc -l) -ne 1 ]] ; then
+				sudo apt-get update && \
+					sudo apt-get install -y \
+					dnsutils
+			fi
+			;;
+		nmap)
+			if [[ $(which $query|wc -l) -ne 1 ]] ; then
+				sudo apt-get update && \
+					sudo apt-get install -y \
+					nmap
+			fi
+			;;
+		etchosts)
+			;;
 	esac
 done
-if [ ${configure_debug} -gt 1 ]
-then
-	echo configure_verbose=${configure_verbose}
+
+if [[ "${FUNC_DEBUG}" -gt "${DEBUGOFF}" ]] ; then
+	echo verbosemode=${verbosemode}
 	echo subnet=${subnet}
 	echo netmask=${netmask}
 	echo gateway=${gateway}
@@ -227,7 +278,7 @@ pingsleep=1
 # provision BMCs
 ####################
 rm -f ${pinglog}
-for i in $(seq ${Low_PING_Port}     ${High_PING_Port})
+for ((i=${Low_PING_Port}; i<=${High_PING_Port};i++))
 do
 	ipaddr="${subnet}.${i}"
 	####################
@@ -239,16 +290,14 @@ do
         ping -w 1 -c 1 ${ipaddr} >> ${pinglog}-${i} 2>&1 &
 done
 
-if [ ${configure_debug} = 1 ]
-then
+if [[ "${FUNC_DEBUG}" -ge "${DEBUGSETX}" ]] ; then
 	set -x
 fi
 
 ####################
 # Wait for the background processes to finish.
 ####################
-if [ $# -lt 1 ]
-then
+if [[ $# -lt 1 ]] ; then
   sleeptime=5
 else
   sleeptime=$1
@@ -294,7 +343,8 @@ do
 	ip_ping[${i}]=1
 done
 responders=0
-for i in $(seq ${Low_PING_Port} ${High_PING_Port})
+#for i in { ${Low_PING_Port} ${High_PING_Port} }
+for ((i=${Low_PING_Port};i<=${High_PING_Port};i++))
 do
 	thisline=""
 	ipaddr="${subnet}.${i}"
@@ -304,16 +354,13 @@ do
 		arp)
 			arp_response=$(arp ${ipaddr} | tail -1)
 			arp_name=$(echo ${arp_response} | cut -d ' ' -f 1)
-			if [ "${arp_name}" = "${ipaddr}" ]
-			then
+			if [[ "${arp_name}" == "${ipaddr}" ]] ; then
 				no_entry="$(echo ${arp_response} | awk '{print $4}')"
-				if [ "${no_entry}" = "no" ]
-				then
+				if [[ "${no_entry}" == "no" ]] ; then
 					arp_name="no entry"
 				else
 					incomplete="$(echo ${arp_response} | awk '{print $2}')"
-					if [ "${incomplete}" = "(incomplete)" ]
-					then
+					if [[ "${incomplete}" == "(incomplete)" ]] ; then
 						arp_name="incomplete"
 					else
 						arp_name=${incomplete}
@@ -326,8 +373,7 @@ do
 		nslookup)
 			nslookup_name=$(nslookup ${ipaddr} | head -1 | cut -d ' ' -f 3)
       # nslookup=$(dig +noall +answer -x ${ipaddr} | head -1 | cut -d ' ' -f 2 | awk '{print $4}')
-			if [ "${nslookup_name}" = "can't" ]
-			then
+			if [[ "${nslookup_name}" == "can't" ]] ; then
 				nslookup_name="not found"
 			else
 				nslookup_name=$(echo ${nslookup_name}|sed -e 's/\.$//')
@@ -337,8 +383,7 @@ do
 			;;
 		arpscan)
 			arpscan_name=$(awk -F '\t' "/^${ipaddr}\\t/{print \$3}" < ${arpscanlogfile})
-			if [ -z "${arpscan_name}" ]
-			then
+			if [[ -z "${arpscan_name}" ]] ; then
 				arpscan_name="not found"
 			else
 				ip_response[${i}]=1
@@ -348,17 +393,14 @@ do
 		etchosts) 
 			hostdata=$(egrep '^'${ipaddr}'[^0-9]' /etc/hosts|sed  's/^.*\t//')
 
-			if [ ! -z "${hostdata}" ]
-			then
+			if [[ ! -z "${hostdata}" ]] ; then
 				thisline="${thisline}\t${hostdata}"
 			fi
 			;;
 		esac
 	done
-	if [ ! -z "${ip_response[${i}]}" ]
-	then
-		if [ ! -z "${ip_ping[${i}]}" ]
-		then
+	if [[ ! -z "${ip_response[${i}]}" ]] ; then
+		if [[ ! -z "${ip_ping[${i}]}" ]] ; then
 			pinged="yes"
 		else
 			pinged="no"
@@ -367,15 +409,13 @@ do
 		((responders++))
 	fi
 done
-if [ $configure_debug = 0 ]
-then
+if [[ "${FUNC_DEBUG}" == "${DEBUGOFF}"  ]] ; then
 	clear
 fi
 ####################
 # Unless we are debugging, clean up all of the temporary files
 ####################
-if [ -r "${colfile}" ]
-then
+if [[ -r "${colfile}" ]] ; then
   cat ${colfile} | tr '\t' ';' | column -s ';' -t | more
 else
   errecho ${FUNCNAME} ${LINENO} "colfile not found = ${colfile}"
@@ -389,8 +429,7 @@ echo "${0##*/}: ${responders} out of $(wc -l ${colfile}) answered"
 ####################
 # Unless we are debugging, clean up all of the temporary files
 ####################
-if [ "${configure_debug}" -eq 0 ]
-then
+if [[ "${FUNC_DEBUG}" -eq "${DEBUGOFF}" ]] ; then
 	rm -rf "${grepallfile}" "${greplogfile}" "${pinglog}-*" \
     "${colfile}" "${pingertmp}"
 fi
@@ -398,8 +437,7 @@ fi
 ####################
 # if there were no responses then exit with an error
 ####################
-if [ ${responders} -gt 0 ]
-then
+if [[ ${responders} -gt 0 ]] ; then
 	exit 0
 	rm -rf ${pingertmp}
 else
