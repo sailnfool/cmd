@@ -1,10 +1,10 @@
 #!/bin/bash
 scriptname=${0##*/}
 ########################################################################
-# copyrightyear         : (C) 2022
-# copyrightowncer       : Robert E. Novak
+# copyrightyear         : (C) 2023
+# copyrightowncer       : Robert E. Novak dba Sea2cloud
 # rightsgranted         : All Rights Reserved
-# location              : Modesto, CA 95356
+# location              : Cebu, Philippines 6000
 ########################################################################
 #
 # countfiles - Count the number of files underneath the directory 
@@ -20,18 +20,19 @@ scriptname=${0##*/}
 #_____________________________________________________________________
 # Rev.|Aut| Date     | Notes
 #_____________________________________________________________________
+# 3.1 |REN|08/05/2023| Output of hostname changed, added verbose code
+#                    | removed errecho
 # 3.0 |REN|08/03/2022| New headers
 # 2.2 |REN|03/15/2021| Fixed the column command invocation.
 # 2.1 |REN|06/27/2020| brought up to date with getopts
 # 2.0 |REN|12/03/2019| Modified to use more source'd functions
 # 1.1 |REN|07/29/2010| Installed new prolog, cleaned up the
-#                      | temporary files on exit and added a 
-#                      | correct exit code
+#                    | temporary files on exit and added a 
+#                    | correct exit code
 # 1.0 |REN|07/22/2010| Initial Release
 #_____________________________________________________________________
 #
 source func.debug
-source func.errecho
 source func.insufficient
 source func.regex
 
@@ -54,7 +55,7 @@ mkdir -p $pingertmp
 #		-I <Low PING port>
 #		-O <High Ping port>
 ####################
-subnet=$(hostname -I | sed -e 's/\.[^\.]*$//')
+subnet=$(hostname -I | sed -e 's/\.[^\.]* .*$//')
 netdevice=$(ip route list default | cut -f 5 -d ' ')
 netmask=$(ifconfig "$netdevice" | awk '/netmask/{ print $4;}')
 gateway=$(ip r | grep default | awk -F " " '{print $3}')
@@ -87,7 +88,7 @@ configure_gateway="FALSE"
 # This is the subnet 
 ####################
 configure_IPrefix="TRUE"
-subnet=$(hostname -I | sed -e 's/\.[^\.]*$//')
+subnet=$(hostname -I | sed -e 's/\.[^\.]* .*$//')
 configure_IPnetmask="TRUE"
 
 ####################
@@ -124,21 +125,21 @@ do_etchosts=1
 included="arp nslookup arpscan nmap etchosts"
 excluded="nmap"
 if [[ "${FUNC_DEBUG}" -gt "${DEBUGOFF}" ]] ; then
-	echo "Parameters are $*"
+	echo "${scriptname}: Parameters are $*" >&2
 fi
 while getopts ${optionargs} name
 do
 	case ${name} in
 		h)
-			errecho -e "${USAGE}"
+			echo -e "${scriptname}:\n${USAGE}" >&2
 			if [[ "${verbosemode}" == "TRUE" ]] ; then
-				errecho -e "${DEBUG_USAGE}"
+				echo -e "${scriptname}:\n${DEBUG_USAGE}" >&2
 			fi
 			exit 0
 			;;
 		d)	
 			if [[ "${OPTARG}" =~ ${re_digit} ]] ; then
-				errecho "-d must be  digit ${OPTARG}"
+				echo "${scriptname}:-d must be  digit ${OPTARG}" >&2
 				exit 1
 			fi
 			FUNC_DEBUG="${OPTARG}"
@@ -174,14 +175,25 @@ do
 		X)	excluded="${excluded} " \
 				"$(echo ${OPTARG}|tr ':' ' ')"
 			;;
-		\?)	errecho "invalid option -${OPTARG}"
-			errecho -e "${USAGE}"
+		\?)	echo "${scriptname}:invalid option -${OPTARG}" >&2
+			echo -e "${scriptname}:\n${USAGE}" >&2
 			exit 1
 			;;
 	esac
 done
 
 shift "$((${OPTIND} - 1 ))"
+subnet=$(hostname -I | sed -e 's/\.[^\.]* .*$//')
+netdevice=$(ip route list default | cut -f 5 -d ' ')
+netmask=$(ifconfig "$netdevice" | awk '/netmask/{ print $4;}')
+gateway=$(ip r | grep default | awk -F " " '{print $3}')
+
+if [[ "${verbosemode}" == "TRUE" ]] ; then
+  echo "${scriptname}: subnet=${subnet}" >&2
+  echo "${scriptname}: netdevice=${netdevice}" >&2
+  echo "${scriptname}: netmask=${netmask}" >&2
+  echo "${scriptname}: gateway=${gateway}" >&2
+fi
 
 ####################
 # Remove the excluded tests from the included list
@@ -198,7 +210,7 @@ done
 
 if [[ $# -lt ${NUMARGS} ]] ; then
 	insufficient ${NUMARGS} $@
-	errecho -e ${USAGE}
+	echo -e "${scriptname}:\n${USAGE}" >&2
 	exit 2
 fi
 for query in ${newincluded}
@@ -238,12 +250,12 @@ do
 done
 
 if [[ "${FUNC_DEBUG}" -gt "${DEBUGOFF}" ]] ; then
-	echo verbosemode=${verbosemode}
-	echo subnet=${subnet}
-	echo netmask=${netmask}
-	echo gateway=${gateway}
-	echo Low_PING_Port=${Low_PING_Port}
-	echo High_PING_Port=${High_PING_Port}
+	echo "${scriptname}: verbosemode=${verbosemode}" >&2
+	echo "${scriptname}: subnet=${subnet}" >&2
+	echo "${scriptname}: netmask=${netmask}" >&2
+	echo "${scriptname}: gateway=${gateway}" >&2
+	echo "${scriptname}: Low_PING_Port=${Low_PING_Port}" >&2
+	echo "${scriptname}: High_PING_Port=${High_PING_Port}" >&2
 fi
 
 ####################
@@ -418,14 +430,14 @@ fi
 if [[ -r "${colfile}" ]] ; then
   cat ${colfile} | tr '\t' ';' | column -s ';' -t | more
 else
-  errecho ${FUNCNAME} ${LINENO} "colfile not found = ${colfile}"
+  echo "${scriptname}:${FUNCNAME} ${LINENO} colfile not found = ${colfile}" >&2
   exit -1
 fi
 
 ####################
 # tell how many systems answered the queries (including pings)
 ####################
-echo "${0##*/}: ${responders} out of $(wc -l ${colfile}) answered"
+echo "${scriptname}: ${responders} out of $(wc -l ${colfile}) answered"
 ####################
 # Unless we are debugging, clean up all of the temporary files
 ####################
